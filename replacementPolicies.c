@@ -24,11 +24,14 @@ double lruPFRate;
 double fifoPFRate;
 double clockPFRate;
 
+// Declare clockFrames as a global variable
+struct Clock clockFrames[2000]; // Maximum size to match the history array
+
 // Function prototypes for page replacement algorithms
 int opt(int frameSize, int *all, int history[2000][frameSize]);
 int lru(int frameSize, int *all, int history[2000][frameSize]);
 int fifo(int frameSize, int *all, int history[2000][frameSize]);
-int clockAlgo(int frameSize, int *all, int history[2000][frameSize]);
+int clockAlgo(int frameSize, int *all, int history[2000][frameSize], bool starHistory[2000][frameSize]);
 int optimalHelper(int start, int frameSize, int *all, int *opt);
 
 // Generates a random number between low and high
@@ -49,6 +52,7 @@ int main()
     int fifoHistory[2000][frameSize];
     int lruHistory[2000][frameSize];
     int clockHistory[2000][frameSize];
+    bool clockStarHistory[2000][frameSize];
 
     // Fill the page reference string with random values
     for (int i = 0; i < 2000; i++)
@@ -60,7 +64,7 @@ int main()
     opt(frameSize, all, optHistory);
     fifo(frameSize, all, fifoHistory);
     lru(frameSize, all, lruHistory);
-    clockAlgo(frameSize, all, clockHistory);
+    clockAlgo(frameSize, all, clockHistory, clockStarHistory);
 
     // Output the page fault rates
     printf("\nFrame Size: %i\n", frameSize);
@@ -76,27 +80,52 @@ int main()
     int snapshot;
     for (;;)
     {
-        printf("Which frame snapshot to be displayed (Enter 9999 to end program): ");
+        printf("Which frame snapshot to be displayed (Enter -1 to end program): ");
         scanf("%i", &snapshot);
-        if (snapshot == 9999)
+        if (snapshot == -1)
         {
             return 1;
         }
-        printf("Page Stream | OPT      FIFO     LRU      CLOCK\n");
-        printf("------------------------------------------------\n");
-        for (int i = snapshot - 5; i <= snapshot + 5; i++)
+
+        printf("Snapshot for frame %i:\n", snapshot);
+
+        printf("OPT: ");
+        for (int i = 0; i < frameSize; i++)
         {
-            if (i >= 0 && i < 2000) // Ensure index is within bounds
+            printf("%d ", optHistory[snapshot][i]);
+        }
+        printf("\n");
+
+        printf("FIFO: ");
+        for (int i = 0; i < frameSize; i++)
+        {
+            printf("%d ", fifoHistory[snapshot][i]);
+        }
+        printf("\n");
+
+        printf("LRU: ");
+        for (int i = 0; i < frameSize; i++)
+        {
+            printf("%d ", lruHistory[snapshot][i]);
+        }
+        printf("\n");
+
+        printf("CLOCK: ");
+        for (int i = 0; i < frameSize; i++)
+        {
+            if (clockHistory[snapshot][i] != -1)
             {
-                printf("%-12d | %-8d %-8d %-8d %-8d\n",
-                       all[i],
-                       optHistory[i][0],
-                       fifoHistory[i][0],
-                       lruHistory[i][0],
-                       clockHistory[i][0]);
+                printf("%d", clockHistory[snapshot][i]);
+                if (clockStarHistory[snapshot][i])
+                    printf("*");
+                printf(" ");
             }
         }
+        printf("\n");
+
+        printf("\n");
     }
+
     return 0;
 }
 
@@ -287,27 +316,26 @@ int lru(int frameSize, int *all, int history[2000][frameSize])
 }
 
 // CLOCK Page Replacement Algorithm
-int clockAlgo(int frameSize, int *all, int history[2000][frameSize])
+int clockAlgo(int frameSize, int *all, int history[2000][frameSize], bool starHistory[2000][frameSize])
 {
-    struct Clock clock[frameSize];
+    // Use the global clockFrames array
     bool hitMiss = false;
     int misses = 0;
-    int cap = 0;
-    int uses[frameSize];
     int curr = 0; // Pointer for clock hand
 
     for (int i = 0; i < frameSize; i++)
     {
-        clock[i].num = -1;
+        clockFrames[i].num = -1;
+        clockFrames[i].star = false; // Initialize reference bit
     }
 
     for (int i = 0; i < 2000; i++)
     {
         for (int j = 0; j < frameSize; j++)
         {
-            if (clock[j].num == all[i])
+            if (clockFrames[j].num == all[i])
             {
-                clock[j].star = true; // Set reference bit
+                clockFrames[j].star = true; // Set reference bit
                 hitMiss = true;
                 break;
             }
@@ -318,21 +346,22 @@ int clockAlgo(int frameSize, int *all, int history[2000][frameSize])
             misses++;
             for (;;)
             {
-                if (clock[curr].star == false)
+                if (clockFrames[curr].star == false)
                 {
-                    clock[curr].num = all[i]; // Replace this page
-                    clock[curr].star = true;
+                    clockFrames[curr].num = all[i]; // Replace this page
+                    clockFrames[curr].star = true;
                     curr = (curr + 1) % frameSize;
                     break;
                 }
-                clock[curr].star = false; // Clear and move forward
+                clockFrames[curr].star = false; // Clear and move forward
                 curr = (curr + 1) % frameSize;
             }
         }
 
         for (int k = 0; k < frameSize; k++)
         {
-            history[i][k] = clock[k].num;
+            history[i][k] = clockFrames[k].num; // Record current state
+            starHistory[i][k] = clockFrames[k].star;
         }
         hitMiss = false;
     }
